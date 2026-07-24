@@ -1,179 +1,129 @@
-module Vedic_Mult_spipe#(parameter BIT_WIDTH = 16)(
-    
-    input [BIT_WIDTH - 1: 0] a,
-    input  [BIT_WIDTH - 1: 0] b,
-    input clk,
-    input reset,
-    output [(2*BIT_WIDTH - 1) : 0] out    
-);    
-    localparam HALF = BIT_WIDTH/2;
+module Vedic_Mult_spipe #(
+    parameter BIT_WIDTH  = 16,
+    parameter GROUP_SIZE = 4
+)(
+    input  wire                     clk,
+    input  wire                     reset,
+    input  wire                     valid_i,
+    input  wire [BIT_WIDTH-1:0]     a,
+    input  wire [BIT_WIDTH-1:0]     b,
+    output reg                      valid_o,
+    output wire [2*BIT_WIDTH-1:0]   out
+);
 
-    //stage 1
-    wire [BIT_WIDTH - 1 : 0] p_ll, p_lh, p_hl, p_hh;
-    reg [BIT_WIDTH - 1 : 0] p_ll_r, p_lh_r, p_hl_r, p_hh_r;
-    
-    //stage 2
-    wire [BIT_WIDTH-1:0] adder1_sum; 
-    wire carry1;
-    reg [BIT_WIDTH-1:0] adder1_sum_r, p_ll_delay, p_hh_delay;
-    reg carry1_r;
-    
-    //stage3
-    wire [BIT_WIDTH-1:0] adder2_sum;
-    wire carry2;
-    reg [HALF - 1:0] p_ll_low_r, p_hh_high_r;
-    reg [BIT_WIDTH-1:0] adder2_sum_r;
-    reg carry1_r_delay, carry2_r;
+    /* This wrapper is intentionally restricted to even BIT_WIDTH >= 2. */
+    localparam HALF = BIT_WIDTH / 2;
 
-    //stage 4
-    reg [BIT_WIDTH-1:0] adder2_sum_delay;
-    reg [HALF - 1:0] p_ll_low_delay, p_hh_high_delay;
-    reg or_gate_r;
+    wire [BIT_WIDTH-1:0] p_ll;
+    wire [BIT_WIDTH-1:0] p_lh;
+    wire [BIT_WIDTH-1:0] p_hl;
+    wire [BIT_WIDTH-1:0] p_hh;
 
-    //stage 5
-    wire [HALF - 1:0] half_adder_sum;
-    reg [HALF - 1:0] half_adder_sum_r, p_ll_low_delay;
-    wire [BIT_WIDTH-1:0] adder2_sum_delay;
+    reg [BIT_WIDTH-1:0] p_ll_r;
+    reg [BIT_WIDTH-1:0] p_lh_r;
+    reg [BIT_WIDTH-1:0] p_hl_r;
+    reg [BIT_WIDTH-1:0] p_hh_r;
 
+    wire [BIT_WIDTH-1:0] cross_sum;
+    wire                 cross_carry;
+    wire [BIT_WIDTH-1:0] middle_sum;
+    wire                 middle_carry;
+    wire [HALF-1:0]      upper_addend;
+    wire [HALF-1:0]      upper_sum;
+    wire                 upper_carry_unused;
 
-    if ((BIT_WIDTH > 2) && (BIT_WIDTH%2 == 0 )) begin: 
+    Vedic_Mult_comb #(
+        .BIT_WIDTH (HALF),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_ll (
+        .a   (a[HALF-1:0]),
+        .b   (b[HALF-1:0]),
+        .out (p_ll)
+    );
 
+    Vedic_Mult_comb #(
+        .BIT_WIDTH (HALF),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_lh (
+        .a   (a[HALF-1:0]),
+        .b   (b[BIT_WIDTH-1:HALF]),
+        .out (p_lh)
+    );
 
+    Vedic_Mult_comb #(
+        .BIT_WIDTH (HALF),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_hl (
+        .a   (a[BIT_WIDTH-1:HALF]),
+        .b   (b[HALF-1:0]),
+        .out (p_hl)
+    );
 
-            Vedic_Mult_comb#(.WIDTH(HALF))(
-                .a(a[HALF-1:0]),
-                .b(b[HALF-1:0]),
-                .out(p_ll)
-            );
+    Vedic_Mult_comb #(
+        .BIT_WIDTH (HALF),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_hh (
+        .a   (a[BIT_WIDTH-1:HALF]),
+        .b   (b[BIT_WIDTH-1:HALF]),
+        .out (p_hh)
+    );
 
-            Vedic_Mult_comb#(.WIDTH(HALF))(
-                .a(a[HALF-1:0]),
-                .b(b[BIT_WIDTH-1:HALF]),
-                .out(p_lh)
-            );
-            
-            Vedic_Mult_comb#(.WIDTH(HALF))(
-                .a(a[BIT_WIDTH-1:HALF]),
-                .b(b[HALF-1:0]),
-                .out(p_hl)
-            );
-            
-            Vedic_Mult_comb#(.WIDTH(HALF))(
-                .a(a[BIT_WIDTH-1:HALF]),
-                .b(b[BIT_WIDTH-1:HALF]),
-                .out(p_hh)
-            );
+    /* One pipeline register bank after the four internal multipliers. */
+    always @(posedge clk) begin
+        if (!reset) begin
+            p_ll_r  <= {BIT_WIDTH{1'b0}};
+            p_lh_r  <= {BIT_WIDTH{1'b0}};
+            p_hl_r  <= {BIT_WIDTH{1'b0}};
+            p_hh_r  <= {BIT_WIDTH{1'b0}};
+            valid_o <= 1'b0;
+        end else begin
+            valid_o <= valid_i;
 
+            if (valid_i) begin
+                p_ll_r <= p_ll;
+                p_lh_r <= p_lh;
+                p_hl_r <= p_hl;
+                p_hh_r <= p_hh;
+            end
+        end
+    end
 
-        always @(posedge clk) begin
+    CLA #(
+        .BIT_WIDTH (BIT_WIDTH),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_cross_adder (
+        .a     (p_lh_r),
+        .b     (p_hl_r),
+        .cin   (1'b0),
+        .sum   (cross_sum),
+        .carry (cross_carry)
+    );
 
-            if (!reset) begin
+    CLA #(
+        .BIT_WIDTH (BIT_WIDTH),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_middle_adder (
+        .a     (cross_sum),
+        .b     ({p_hh_r[HALF-1:0], p_ll_r[BIT_WIDTH-1:HALF]}),
+        .cin   (1'b0),
+        .sum   (middle_sum),
+        .carry (middle_carry)
+    );
 
-            p_ll_r <= 0;
-            p_lh_r <= 0;
-            p_hl_r <= 0;
-            p_hh_r <= 0;
+    assign upper_addend = cross_carry;
 
-            end else begin
-            
-            p_ll_r <= p_ll;
-            p_lh_r <= p_lh;
-            p_hl_r <= p_hl;
-            p_hh_r <= p_hh;
-                
-            end         
+    CLA #(
+        .BIT_WIDTH (HALF),
+        .GROUP_SIZE(GROUP_SIZE)
+    ) u_upper_adder (
+        .a     (p_hh_r[BIT_WIDTH-1:HALF]),
+        .b     (upper_addend),
+        .cin   (middle_carry),
+        .sum   (upper_sum),
+        .carry (upper_carry_unused)
+    );
 
-        end    
-
-        CLA#(.BIT_WIDTH(BIT_WIDTH), .GROUP_SIZE(4))(
-            .a(p_lh_r),
-            .b(p_hl_r),
-            .cin(1'b0),
-            .sum(adder1_sum),
-            .carry(carry1)
-        );
-
-        CLA#(.BIT_WIDTH(BIT_WIDTH), .GROUP_SIZE(4))(
-            .a(adder1_sum),
-            .b({p_hh_r[HALF-1:0], p_ll_r[BIT_WIDTH-1:HALF]}),
-            .cin(1'b0),
-            .sum(adder2_sum),
-            .carry(carry2)
-        );
-
-        assign wire or_gate = carry1_r_delay || carry2_r;
-
-        CLA#(.BIT_WIDTH(HALF), .GROUP_SIZE())(
-            .a(p_hh_r[BIT_WIDTH-1:HALF]),
-            .b(or_gate),
-            .cin(1'b0),
-            .sum(half_adder_sum),
-
-        );
-            
-        out <= {half_adder_sum, adder2_sum_delay, p_ll_low_delay};
-
-
-    end elsif ((BIT_WIDTH > 2) && (BIT_WIDTH%2 != 0 )) begin
-
-            wire [(2*(BIT_WIDTH-1))-1 : 0] vedic_out;
-
-            Vedic_Mult_spipe#(BIT_WIDTH-1) mult1(
-                .a( a[BIT_WIDTH-2:0]), 
-                .b( b[BIT_WIDTH-2:0]),
-                .out( vedic_out [BIT_WIDTH-2:0])    
-            );
-
-            out[BIT_WIDTH-2:0] = vedic_out [BIT_WIDTH-2:0];
-
-            wire [(2*(BIT_WIDTH-1))-1 : 0] mux_outputs;
-
-
-            assign mux_outputs[BIT_WIDTH-2:0] if b[BIT_WIDTH-1] == 1'b1 ? a[BIT_WIDTH-2 : 0] : 12'b0;
-            assign mux_outputs[(2*(BIT_WIDTH-1))-1:BIT_WIDTH-1] if a[BIT_WIDTH-1] == 1'b1 ? b[BIT_WIDTH-2 : 0] : 12'b0;
-
-            wire [BIT_WIDTH-2 : 0] adder1_sum;
-            wire [2:0] carry_from_adders;
-
-            CLA_grouped#(BIT_WIDTH-1) adder1 (
-                .a( mux_outputs[BIT_WIDTH-2:0]),
-                .b( mux_outputs[(2*(BIT_WIDTH-1))-1:BIT_WIDTH-1]),
-                .cin (1'b0),
-                .sum( adder1_sum),
-                .carry( carry_from_adders[0])
-            );
-
-            CLA_grouped#(BIT_WIDTH-1) adder2 (
-                .a( adder1_sum),
-                .b( vedic_out[(2*(BIT_WIDTH-1))-1 : BIT_WIDTH-1]),
-                .cin (1'b0),
-                .sum( out[(2*(BIT_WIDTH-1))-1: BIT_WIDTH-1]),
-                .carry( carry_from_adders[1])
-            );
-
-            
-
-            full_adder_hardcoded(
-                .a( (a[BIT_WIDTH]&b[BIT_WIDTH])),
-                .b( carry_from_adders[1]),
-                .c_in( carry_from_adders[0]),
-                .cum( out[2*(BIT_WIDTH-1)]),
-                c_out( out[2*(BIT_WIDTH) -1])
-            );
-
-
-    end else begin: two
-
-        vedic_mult_2bit(
-            .a( a),
-            .b( b),
-            .out( out)
-        );
-
-    end       
-    
-
-    assert_property(out = a *b);
-    assume_property(!$isunknown(a) & !$isunknown(b));
+    /* Combinational output from the registered partial products: one-cycle latency. */
+    assign out = {upper_sum, middle_sum, p_ll_r[HALF-1:0]};
 
 endmodule

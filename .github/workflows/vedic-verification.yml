@@ -1,0 +1,32 @@
+name: Vedic arithmetic verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install OSS CAD Suite
+        uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Verilog testbenches
+        run: bash verification/run_simulations.sh
+
+      - name: Prove grouped CLA properties
+        run: bash "Adders/Look Ahead Carry Adder/grouped/version1/formal/run_formal.sh"
+
+      - name: Prove Vedic multiplier properties
+        run: bash "Multipliers/Vedic Multiplier/formal/run_formal.sh"

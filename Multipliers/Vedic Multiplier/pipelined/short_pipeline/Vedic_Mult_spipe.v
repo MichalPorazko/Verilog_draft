@@ -1,4 +1,4 @@
-module Vedic_Mult_pipe#(parameter BIT_WIDTH = 16)(
+module Vedic_Mult_spipe#(parameter BIT_WIDTH = 16)(
     
     input [BIT_WIDTH - 1: 0] a,
     input  [BIT_WIDTH - 1: 0] b,
@@ -93,85 +93,32 @@ module Vedic_Mult_pipe#(parameter BIT_WIDTH = 16)(
             .carry(carry1)
         );
 
-        always @(posedge clk) begin
-
-            if (!reset) begin
-
-            p_ll_delay <= 0;
-            adder1_sum_r <= 0;
-            carry1_r <= 0;
-            p_hh_delay <= 0;
-
-            end else begin
-            
-            p_ll_delay <= p_ll_r;
-            adder1_sum_r <= adder1_sum;
-            carry1_r <= carry1;
-            p_hh_delay <= p_hh_r;
-                
-            end         
-
-        end 
-
         CLA#(.BIT_WIDTH(BIT_WIDTH), .GROUP_SIZE(4))(
-            .a(adder1_sum_r),
-            .b({p_hh_delay[HALF-1:0], p_ll_delay[BIT_WIDTH-1:HALF]}),
+            .a(adder1_sum),
+            .b({p_hh_r[HALF-1:0], p_ll_r[BIT_WIDTH-1:HALF]}),
             .cin(1'b0),
             .sum(adder2_sum),
             .carry(carry2)
         );
 
-        always @(posedge clk) begin
-
-            if (!reset) begin
-
-            p_ll_low_r <= 0;
-            adder2_sum_r <= 0;
-            carry2_r <= 0;
-            p_hh_high_r <= 0;
-            carry1_r_delay <= 0;
-
-            end else begin
-            
-            p_ll_low_r <= p_ll_delay[HALF-1:0];
-            adder2_sum_r <= adder2_sum;
-            carry2_r <= carry2;
-            p_hh_high_r <= p_hh_delay[BIT_WIDTH-1:HALF];
-            carry1_r_delay <= carry1_r;
-
-            end         
-
-        end 
-
         assign wire or_gate = carry1_r_delay || carry2_r;
 
         CLA#(.BIT_WIDTH(HALF), .GROUP_SIZE())(
-            .a(p_hh_high_delay),
-            .b(or_gate_r),
+            .a(p_hh_r[BIT_WIDTH-1:HALF]),
+            .b(or_gate),
             .cin(1'b0),
             .sum(half_adder_sum),
 
         );
-
-        always @(posedge clk) begin
-
-            if (!reset) begin
-
-            out <= 0;
-
-            end else begin
             
-            out <= {half_adder_sum, adder2_sum_delay, p_ll_low_delay};
+        out <= {half_adder_sum, adder2_sum_delay, p_ll_low_delay};
 
-            end         
-
-        end 
 
     end elsif ((BIT_WIDTH > 2) && (BIT_WIDTH%2 != 0 )) begin
 
             wire [(2*(BIT_WIDTH-1))-1 : 0] vedic_out;
 
-            Vedic_Mult_pipe#(BIT_WIDTH-1) mult1(
+            Vedic_Mult_spipe#(BIT_WIDTH-1) mult1(
                 .a( a[BIT_WIDTH-2:0]), 
                 .b( b[BIT_WIDTH-2:0]),
                 .out( vedic_out [BIT_WIDTH-2:0])    

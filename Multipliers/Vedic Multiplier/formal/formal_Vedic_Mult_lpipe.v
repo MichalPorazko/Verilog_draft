@@ -3,7 +3,7 @@ module formal_Vedic_Mult_lpipe;
     parameter BIT_WIDTH  = 6;
     parameter GROUP_SIZE = 4;
 
-    (* gclk *) reg clk;
+    reg clk;
     reg reset;
 
     (* anyseq *) reg                 valid_i;
@@ -45,6 +45,7 @@ module formal_Vedic_Mult_lpipe;
     assign product_ref = a_extended * b_extended;
 
     initial begin
+        clk           = 1'b0;
         reset         = 1'b0;
         ref_valid_1   = 1'b0;
         ref_valid_2   = 1'b0;
@@ -55,6 +56,11 @@ module formal_Vedic_Mult_lpipe;
         ref_out_3     = {(2*BIT_WIDTH){1'b0}};
         ref_out_4     = {(2*BIT_WIDTH){1'b0}};
         check_enabled = 1'b0;
+    end
+
+    /* Generate a real alternating DUT clock from the formal global timestep. */
+    always @($global_clock) begin
+        clk <= !clk;
     end
 
     always @(posedge clk) begin

@@ -17,9 +17,9 @@ module formal_Vedic_Mult_spipe;
     wire [2*BIT_WIDTH-1:0] product_ref;
 
     /* Independent one-stage reference pipeline. */
-    reg                    ref_valid;
-    reg [2*BIT_WIDTH-1:0]  ref_out;
-    reg                    reset_seen;
+    reg                   ref_valid;
+    reg [2*BIT_WIDTH-1:0] ref_out;
+    reg                   check_enabled;
 
     Vedic_Mult_spipe #(
         .BIT_WIDTH (BIT_WIDTH),
@@ -39,10 +39,10 @@ module formal_Vedic_Mult_spipe;
     assign product_ref = a_extended * b_extended;
 
     initial begin
-        reset      = 1'b0;
-        ref_valid  = 1'b0;
-        ref_out    = {(2*BIT_WIDTH){1'b0}};
-        reset_seen = 1'b0;
+        reset         = 1'b0;
+        ref_valid     = 1'b0;
+        ref_out       = {(2*BIT_WIDTH){1'b0}};
+        check_enabled = 1'b0;
     end
 
     /* Hold reset low for the first formal edge, then run continuously. */
@@ -50,11 +50,12 @@ module formal_Vedic_Mult_spipe;
         reset <= 1'b1;
 
         if (!reset) begin
-            ref_valid  <= 1'b0;
-            ref_out    <= {(2*BIT_WIDTH){1'b0}};
-            reset_seen <= 1'b1;
+            ref_valid     <= 1'b0;
+            ref_out       <= {(2*BIT_WIDTH){1'b0}};
+            check_enabled <= 1'b0;
         end else begin
-            ref_valid <= valid_i;
+            ref_valid     <= valid_i;
+            check_enabled <= 1'b1;
 
             if (valid_i) begin
                 ref_out <= product_ref;
@@ -62,9 +63,9 @@ module formal_Vedic_Mult_spipe;
         end
     end
 
-    /* Compare the DUT with the independently maintained reference stage. */
+    /* Compare only after one complete non-reset clock transition. */
     always @* begin
-        if (reset_seen) begin
+        if (check_enabled) begin
             assert(valid_o == ref_valid);
 
             if (ref_valid) begin

@@ -1,21 +1,30 @@
-module calc_carries #(parameter GROUP_SIZE = 4)(
-    input [GROUP_SIZE-1:0] p_in,
-    input [GROUP_SIZE-1:0] g_in,
-    input cin,
-    output [GROUP_SIZE:0] carries,
-    output P,
-    output G
+module calc_carries #(
+    parameter GROUP_SIZE = 4
+)(
+    input  wire [GROUP_SIZE-1:0] p_in,
+    input  wire [GROUP_SIZE-1:0] g_in,
+    input  wire                  cin,
+    output reg  [GROUP_SIZE:0]   carries,
+    output reg                   P,
+    output reg                   G
+);
 
-);            
-
-    integer i, j;
+    integer i;
+    integer j;
     reg acc;
     reg prefix;
-    reg [GROUP_SIZE:0] carries_temp,
 
-
+    /*
+     * Each carry is written as an expanded look-ahead expression.
+     * Synthesis unrolls both loops because GROUP_SIZE is a parameter.
+     */
     always @* begin
-        carries_temp[0] = cin_in;
+        carries    = {(GROUP_SIZE + 1){1'b0}};
+        carries[0] = cin;
+        P           = 1'b1;
+        G           = 1'b0;
+        acc         = 1'b0;
+        prefix      = 1'b0;
 
         for (i = 0; i < GROUP_SIZE; i = i + 1) begin
             acc    = g_in[i];
@@ -26,11 +35,13 @@ module calc_carries #(parameter GROUP_SIZE = 4)(
                 prefix = prefix & p_in[j];
             end
 
-            carries_temp[i+1] = acc | (prefix & cin);
+            carries[i + 1] = acc | (prefix & cin);
+
+            if (i == GROUP_SIZE - 1) begin
+                G = acc;
+                P = prefix;
+            end
         end
     end
-    carries = carries_temp;
-    P = prefix;
-    G = acc;
 
 endmodule

@@ -31,10 +31,12 @@ jobs:
       - name: Prove Vedic multiplier properties
         run: bash "Multipliers/Vedic Multiplier/formal/run_formal.sh"
 
-      - name: Upload formal logs on failure
+      - name: Upload formal diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: vedic-formal-logs
-          path: "Multipliers/Vedic Multiplier/formal/work/*.log"
+          name: vedic-formal-diagnostics
+          path: |
+            Multipliers/Vedic Multiplier/formal/work/*.log
+            Multipliers/Vedic Multiplier/formal/work/vedic_*/engine_0/trace*
           if-no-files-found: ignore

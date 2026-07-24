@@ -1,0 +1,14 @@
+[options]
+mode prove
+depth 2
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal calc_carries.v formal_calc_carries.v
+prep -top formal_calc_carries
+
+[files]
+calc_carries.v
+formal_calc_carries.v

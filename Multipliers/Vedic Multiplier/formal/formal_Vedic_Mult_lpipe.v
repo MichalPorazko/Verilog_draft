@@ -6,9 +6,9 @@ module formal_Vedic_Mult_lpipe;
     (* gclk *) reg clk;
     reg reset;
 
-    (* anyseq *) reg                   valid_i;
-    (* anyseq *) reg [BIT_WIDTH-1:0]   a;
-    (* anyseq *) reg [BIT_WIDTH-1:0]   b;
+    (* anyseq *) reg                 valid_i;
+    (* anyseq *) reg [BIT_WIDTH-1:0] a;
+    (* anyseq *) reg [BIT_WIDTH-1:0] b;
 
     wire                   valid_o;
     wire [2*BIT_WIDTH-1:0] out;
@@ -16,7 +16,16 @@ module formal_Vedic_Mult_lpipe;
     wire [2*BIT_WIDTH-1:0] b_extended;
     wire [2*BIT_WIDTH-1:0] product_ref;
 
-    reg [3:0] f_history;
+    /* Independent four-stage reference pipeline. */
+    reg                    ref_valid_1;
+    reg                    ref_valid_2;
+    reg                    ref_valid_3;
+    reg                    ref_valid_4;
+    reg [2*BIT_WIDTH-1:0]  ref_out_1;
+    reg [2*BIT_WIDTH-1:0]  ref_out_2;
+    reg [2*BIT_WIDTH-1:0]  ref_out_3;
+    reg [2*BIT_WIDTH-1:0]  ref_out_4;
+    reg                    reset_seen;
 
     Vedic_Mult_lpipe #(
         .BIT_WIDTH (BIT_WIDTH),
@@ -36,23 +45,61 @@ module formal_Vedic_Mult_lpipe;
     assign product_ref = a_extended * b_extended;
 
     initial begin
-        reset     = 1'b0;
-        f_history = 4'b0000;
+        reset       = 1'b0;
+        ref_valid_1 = 1'b0;
+        ref_valid_2 = 1'b0;
+        ref_valid_3 = 1'b0;
+        ref_valid_4 = 1'b0;
+        ref_out_1   = {(2*BIT_WIDTH){1'b0}};
+        ref_out_2   = {(2*BIT_WIDTH){1'b0}};
+        ref_out_3   = {(2*BIT_WIDTH){1'b0}};
+        ref_out_4   = {(2*BIT_WIDTH){1'b0}};
+        reset_seen  = 1'b0;
     end
 
     always @(posedge clk) begin
-        reset     <= 1'b1;
-        f_history <= {f_history[2:0], 1'b1};
+        reset <= 1'b1;
 
-        if (f_history[0] && !$past(reset)) begin
-            assert(valid_o == 1'b0);
+        if (!reset) begin
+            ref_valid_1 <= 1'b0;
+            ref_valid_2 <= 1'b0;
+            ref_valid_3 <= 1'b0;
+            ref_valid_4 <= 1'b0;
+            ref_out_1   <= {(2*BIT_WIDTH){1'b0}};
+            ref_out_2   <= {(2*BIT_WIDTH){1'b0}};
+            ref_out_3   <= {(2*BIT_WIDTH){1'b0}};
+            ref_out_4   <= {(2*BIT_WIDTH){1'b0}};
+            reset_seen  <= 1'b1;
+        end else begin
+            ref_valid_1 <= valid_i;
+            ref_valid_2 <= ref_valid_1;
+            ref_valid_3 <= ref_valid_2;
+            ref_valid_4 <= ref_valid_3;
+
+            if (valid_i) begin
+                ref_out_1 <= product_ref;
+            end
+
+            if (ref_valid_1) begin
+                ref_out_2 <= ref_out_1;
+            end
+
+            if (ref_valid_2) begin
+                ref_out_3 <= ref_out_2;
+            end
+
+            if (ref_valid_3) begin
+                ref_out_4 <= ref_out_3;
+            end
         end
+    end
 
-        if (f_history[3] && reset && $past(reset, 4)) begin
-            assert(valid_o == $past(valid_i, 4));
+    always @* begin
+        if (reset_seen) begin
+            assert(valid_o == ref_valid_4);
 
-            if ($past(valid_i, 4)) begin
-                assert(out == $past(product_ref, 4));
+            if (ref_valid_4) begin
+                assert(out == ref_out_4);
             end
         end
     end

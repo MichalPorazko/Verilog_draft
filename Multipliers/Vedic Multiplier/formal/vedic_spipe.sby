@@ -1,0 +1,20 @@
+[options]
+mode prove
+depth 6
+multiclock on
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal calc_carries.v cla_tree.v CLA_grouped.v Vedic_mult_2bit.v Vedic_Mult_comb.v Vedic_Mult_spipe.v formal_Vedic_Mult_spipe.v
+prep -top formal_Vedic_Mult_spipe
+
+[files]
+calc_carries.v
+cla_tree.v
+CLA_grouped.v
+Vedic_mult_2bit.v
+Vedic_Mult_comb.v
+Vedic_Mult_spipe.v
+formal_Vedic_Mult_spipe.v

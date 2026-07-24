@@ -9,11 +9,13 @@ module calc_carries #(parameter GROUP_SIZE = 4)(
 );            
 
     integer i, j;
-    wire acc;
-    wire prefix;
+    reg acc;
+    reg prefix;
+    reg [GROUP_SIZE:0] carries_temp,
 
-    begin
-        calc_carries[0] = cin_in;
+
+    always @* begin
+        carries_temp[0] = cin_in;
 
         for (i = 0; i < GROUP_SIZE; i = i + 1) begin
             acc    = g_in[i];
@@ -24,9 +26,10 @@ module calc_carries #(parameter GROUP_SIZE = 4)(
                 prefix = prefix & p_in[j];
             end
 
-            calc_carries[i+1] = acc | (prefix & cin);
+            carries_temp[i+1] = acc | (prefix & cin);
         end
     end
+    carries = carries_temp;
     P = prefix;
     G = acc;
 

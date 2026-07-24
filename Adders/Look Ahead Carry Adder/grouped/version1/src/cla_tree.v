@@ -19,7 +19,7 @@ module cla_tree #(
 
         if ( BIT_WIDTH <= GROUP_SIZE) begin: leaf
 
-            calc_carries #(BIT_WIDTH, GROUP_SIZE) carries (
+            calc_carries #(BIT_WIDTH) carries (
                 .p_in(p),
                 .g_in(g),
                 .cin(cin),

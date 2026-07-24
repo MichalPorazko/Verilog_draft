@@ -1,4 +1,4 @@
-module Vedic_Mult#(parameter BIT_WIDTH = 16)(
+module Vedic_Mult_comb#(parameter BIT_WIDTH = 16)(
     
     input wire [BIT_WIDTH - 1: 0] a,
     input  wire [BIT_WIDTH - 1: 0] b,
@@ -24,7 +24,7 @@ module Vedic_Mult#(parameter BIT_WIDTH = 16)(
 
                     for (ib = 0; ib < 2; ib = ib + 1) begin
 
-                        Vedic_Mult#(.BIT_WIDTH(HALF)) mult (
+                        Vedic_Mult_comb#(.BIT_WIDTH(HALF)) mult (
                             .a   (a[ia*HALF +: HALF]),
                             .b   (b[ib*HALF +: HALF]),
                             .out (internal_vedic_results[index * BIT_WIDTH +: BIT_WIDTH])  
@@ -65,7 +65,7 @@ module Vedic_Mult#(parameter BIT_WIDTH = 16)(
 
             wire [(2*(BIT_WIDTH-1))-1 : 0] vedic_out;
 
-            Vedic_Mult#(BIT_WIDTH-1) mult1(
+            Vedic_Mult_comb#(BIT_WIDTH-1) mult1(
                 .a( a[BIT_WIDTH-2:0]), 
                 .b( b[BIT_WIDTH-2:0]),
                 .out( vedic_out [BIT_WIDTH-2:0])    

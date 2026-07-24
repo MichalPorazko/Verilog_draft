@@ -1,4 +1,4 @@
-module CLA_grouped #(
+module CLA #(
     parameter BIT_WIDTH = 64,
     parameter GROUP_SIZE = 4
 )(
@@ -19,7 +19,7 @@ module CLA_grouped #(
     cla_tree#(BIT_WIDTH, GROUP_SIZE) tree (
         .g(g),
         .p(p),
-        .cin(Cin),
+        .cin(cin),
         .carry(carry_internal),
         .G(G),
         .P(P)

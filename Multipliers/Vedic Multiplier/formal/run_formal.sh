@@ -20,6 +20,22 @@ cp "$VEDIC_ROOT/pipelined/long_pipeline/Vedic_Mult_lpipe.v" "$WORK/"
 cp "$HERE"/*.v "$HERE"/*.sby "$WORK/"
 
 cd "$WORK"
-sby -f vedic_comb.sby
-sby -f vedic_spipe.sby
-sby -f vedic_lpipe.sby
+
+run_proof() {
+    local config="$1"
+    local log="${config%.sby}.log"
+
+    echo "==> $config"
+
+    if sby -f "$config" >"$log" 2>&1; then
+        tail -n 20 "$log"
+    else
+        echo "Formal proof failed; final log lines follow:"
+        tail -n 100 "$log"
+        return 1
+    fi
+}
+
+run_proof vedic_comb.sby
+run_proof vedic_spipe.sby
+run_proof vedic_lpipe.sby

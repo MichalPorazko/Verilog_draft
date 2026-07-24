@@ -1,69 +1,79 @@
 module cla_tree #(
-    parameter BIT_WIDTH = 64,
+    parameter BIT_WIDTH  = 64,
     parameter GROUP_SIZE = 4
 )(
-    input  wire [BIT_WIDTH-1:0] g, p,
+    input  wire [BIT_WIDTH-1:0] g,
+    input  wire [BIT_WIDTH-1:0] p,
     input  wire                 cin,
-    output wire [BIT_WIDTH:0] carry,
-    output wire G, P
+    output wire [BIT_WIDTH:0]   carry,
+    output wire                 G,
+    output wire                 P
 );
-    wire [BIT_WIDTH-1:0] sum;
 
-    localparam NUM_GROUPS = BIT_WIDTH/GROUP_SIZE;
-    wire [NUM_GROUPS-1:0] grp_G, grp_P;
-    wire [NUM_GROUPS:0] grp_c;
+    /* Ceiling division keeps a final group that may be smaller than GROUP_SIZE. */
+    localparam NUM_GROUPS = (BIT_WIDTH + GROUP_SIZE - 1) / GROUP_SIZE;
 
-    wire [NUM_GROUPS*(GROUP_SIZE+1)-1:0] local_c_flat;
-    
+    genvar group_index;
+
     generate
+        if (BIT_WIDTH <= GROUP_SIZE) begin : gen_leaf
+            calc_carries #(
+                .GROUP_SIZE(BIT_WIDTH)
+            ) u_leaf (
+                .p_in    (p),
+                .g_in    (g),
+                .cin     (cin),
+                .carries (carry),
+                .P       (P),
+                .G       (G)
+            );
+        end else begin : gen_tree
+            wire [NUM_GROUPS-1:0] group_G;
+            wire [NUM_GROUPS-1:0] group_P;
+            wire [NUM_GROUPS:0]   group_carry;
 
-        if ( BIT_WIDTH <= GROUP_SIZE) begin: leaf
-
-            calc_carries #(BIT_WIDTH) carries (
-                .p_in(p),
-                .g_in(g),
-                .cin(cin),
-                .carries(carry),
-                .P(P),
-                .G(G)
+            /* The same look-ahead structure is recursively applied between groups. */
+            cla_tree #(
+                .BIT_WIDTH (NUM_GROUPS),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_group_tree (
+                .g     (group_G),
+                .p     (group_P),
+                .cin   (cin),
+                .carry (group_carry),
+                .G     (G),
+                .P     (P)
             );
 
-        end else begin: tree
+            assign carry[0] = cin;
 
-            
+            for (group_index = 0;
+                 group_index < NUM_GROUPS;
+                 group_index = group_index + 1) begin : gen_group
 
-            cla_tree#(NUM_GROUPS, GROUP_SIZE) tree (
-                .p   (grp_P),
-                .g   (grp_G),
-                .cin (cin),
-                .carry   (grp_C),
-                .P   (P),
-                .G   (G)
-            );
+                localparam LSB = group_index * GROUP_SIZE;
+                localparam THIS_WIDTH =
+                    ((LSB + GROUP_SIZE) <= BIT_WIDTH) ?
+                    GROUP_SIZE : (BIT_WIDTH - LSB);
 
-            for (i = 0; i < NUM_GROUPS; i = i + 1) begin : gen_groups
+                wire [THIS_WIDTH:0] local_carry;
+
                 calc_carries #(
-                    .WIDTH(GROUP_SIZE)
-                ) u_chunk (
-                    .p   (p[i*GROUP_SIZE +: GROUP_SIZE]),
-                    .g   (g[i*GROUP_SIZE +: GROUP_SIZE]),
-                    .cin (grp_C[i]),
-                    .c   (local_c_flat[i*(GROUP_SIZE+1) +: (GROUP_SIZE+1)]),
-                    .P   (grp_P[i]),
-                    .G   (grp_G[i])
+                    .GROUP_SIZE(THIS_WIDTH)
+                ) u_group (
+                    .p_in    (p[LSB +: THIS_WIDTH]),
+                    .g_in    (g[LSB +: THIS_WIDTH]),
+                    .cin     (group_carry[group_index]),
+                    .carries (local_carry),
+                    .P       (group_P[group_index]),
+                    .G       (group_G[group_index])
                 );
 
-                assign c[i*GROUP_SIZE + 1+: GROUP_SIZE] =
-                    local_c_flat[i*(GROUP_SIZE+1) +: GROUP_SIZE];
+                /* local_carry[0] is the already-known carry into this group. */
+                assign carry[LSB + 1 +: THIS_WIDTH] =
+                    local_carry[THIS_WIDTH:1];
             end
-
-            carry[BIT_WIDTH] = grp_c[NUM_GROUPS];
-
         end
-        
-    endgenerate    
-
-    
-
+    endgenerate
 
 endmodule

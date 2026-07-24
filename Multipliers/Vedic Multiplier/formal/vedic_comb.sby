@@ -1,0 +1,18 @@
+[options]
+mode prove
+depth 2
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal calc_carries.v cla_tree.v CLA_grouped.v Vedic_mult_2bit.v Vedic_Mult_comb.v formal_Vedic_Mult_comb.v
+prep -top formal_Vedic_Mult_comb
+
+[files]
+calc_carries.v
+cla_tree.v
+CLA_grouped.v
+Vedic_mult_2bit.v
+Vedic_Mult_comb.v
+formal_Vedic_Mult_comb.v

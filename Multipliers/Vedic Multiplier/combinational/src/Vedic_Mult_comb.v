@@ -1,125 +1,176 @@
-module Vedic_Mult_comb#(parameter BIT_WIDTH = 16)(
-    
-    input wire [BIT_WIDTH - 1: 0] a,
-    input  wire [BIT_WIDTH - 1: 0] b,
-    output wire [(2*BIT_WIDTH - 1) : 0] out    
-);    
-    localparam HALF = BIT_WIDTH/2;
-
-    wire [4*BIT_WIDTH - 1 : 0] internal_vedic_results;
-
-    wire [BIT_WIDTH-1:0] adder1_sum;
-
-    wire [2:0] carry_from_adders;
-
-    genvar ia, ib;
-
-    localparam index = (ia * 2) + ib;
+module Vedic_Mult_comb #(
+    parameter BIT_WIDTH  = 16,
+    parameter GROUP_SIZE = 4
+)(
+    input  wire [BIT_WIDTH-1:0]   a,
+    input  wire [BIT_WIDTH-1:0]   b,
+    output wire [2*BIT_WIDTH-1:0] out
+);
 
     generate
+        if (BIT_WIDTH == 1) begin : gen_one_bit
+            assign out = {1'b0, (a[0] & b[0])};
 
-        if ((BIT_WIDTH > 2) && (BIT_WIDTH%2 == 0 )) begin: recursive
-
-                for (ia = 0; ia < 2; ia = ia + 1) begin
-
-                    for (ib = 0; ib < 2; ib = ib + 1) begin
-
-                        Vedic_Mult_comb#(.BIT_WIDTH(HALF)) mult (
-                            .a   (a[ia*HALF +: HALF]),
-                            .b   (b[ib*HALF +: HALF]),
-                            .out (internal_vedic_results[index * BIT_WIDTH +: BIT_WIDTH])  
-                        );                        
-
-                    end  
-
-                end    
-
-            out[HALF-1:0] = internal_vedic_results[HALF-1:0];
-
-
-            CLA_grouped#(.(BIT_WIDTH)) adder_1 (
-                .a(internal_vedic_results[2*BIT_WIDTH - 1: BIT_WIDTH]),
-                .b(internal_vedic_results[3*BIT_WIDTH - 1: 2*BIT_WIDTH]),
-                .cin(1'b0),
-                .sum(adder1_sum)
-                .carry(carry_from_adders[0])
+        end else if (BIT_WIDTH == 2) begin : gen_two_bit
+            vedic_mult_2bit u_base (
+                .a   (a),
+                .b   (b),
+                .out (out)
             );
 
-            CLA_grouped#(.(BIT_WIDTH)) adder_2 (
-                .a(adder1_sum),
-                .b({internal_vedic_results[BIT_WIDTH - 1: HALF], internal_vedic_results[3*BIT_WIDTH + HALF - 1: 3*BIT_WIDTH]}),
-                .cin(1'b0),
-                .sum(out [BIT_WIDTH + HALF-1 : HALF])
-                .carry(carry_from_adders[1])
+        end else if ((BIT_WIDTH % 2) == 0) begin : gen_even
+            localparam HALF = BIT_WIDTH / 2;
+
+            wire [BIT_WIDTH-1:0] p_ll;
+            wire [BIT_WIDTH-1:0] p_lh;
+            wire [BIT_WIDTH-1:0] p_hl;
+            wire [BIT_WIDTH-1:0] p_hh;
+
+            wire [BIT_WIDTH-1:0] cross_sum;
+            wire                 cross_carry;
+            wire [BIT_WIDTH-1:0] middle_sum;
+            wire                 middle_carry;
+            wire [HALF-1:0]      upper_addend;
+            wire [HALF-1:0]      upper_sum;
+            wire                 upper_carry_unused;
+
+            Vedic_Mult_comb #(
+                .BIT_WIDTH (HALF),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_ll (
+                .a   (a[HALF-1:0]),
+                .b   (b[HALF-1:0]),
+                .out (p_ll)
             );
 
-            CLA_grouped#(.(HALF)) adder_3 (
-                .a(internal_vedic_results[4*BIT_WIDTH - 1: 3*BIT_WIDTH+HALF]),
-                .b({carry_from_adders[0] && carry_from_adders[1], 11'b0}),
-                .cin(1'b0),
-                .sum(out [BIT_WIDTH-1 : 3*HALF])
-                .carry(out[BIT_WIDTH])
+            Vedic_Mult_comb #(
+                .BIT_WIDTH (HALF),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_lh (
+                .a   (a[HALF-1:0]),
+                .b   (b[BIT_WIDTH-1:HALF]),
+                .out (p_lh)
             );
 
-        end elsif ((BIT_WIDTH > 2) && (BIT_WIDTH%2 != 0 )) begin
-
-            wire [(2*(BIT_WIDTH-1))-1 : 0] vedic_out;
-
-            Vedic_Mult_comb#(BIT_WIDTH-1) mult1(
-                .a( a[BIT_WIDTH-2:0]), 
-                .b( b[BIT_WIDTH-2:0]),
-                .out( vedic_out [BIT_WIDTH-2:0])    
+            Vedic_Mult_comb #(
+                .BIT_WIDTH (HALF),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_hl (
+                .a   (a[BIT_WIDTH-1:HALF]),
+                .b   (b[HALF-1:0]),
+                .out (p_hl)
             );
 
-            out[BIT_WIDTH-2:0] = vedic_out [BIT_WIDTH-2:0];
-
-            wire [(2*(BIT_WIDTH-1))-1 : 0] mux_outputs;
-
-
-            assign mux_outputs[BIT_WIDTH-2:0] if b[BIT_WIDTH-1] == 1'b1 ? a[BIT_WIDTH-2 : 0] : 12'b0;
-            assign mux_outputs[(2*(BIT_WIDTH-1))-1:BIT_WIDTH-1] if a[BIT_WIDTH-1] == 1'b1 ? b[BIT_WIDTH-2 : 0] : 12'b0;
-
-            wire [BIT_WIDTH-2 : 0] adder1_sum;
-            wire [2:0] carry_from_adders;
-
-            CLA_grouped#(BIT_WIDTH-1) adder1 (
-                .a( mux_outputs[BIT_WIDTH-2:0]),
-                .b( mux_outputs[(2*(BIT_WIDTH-1))-1:BIT_WIDTH-1]),
-                .cin (1'b0),
-                .sum( adder1_sum),
-                .carry( carry_from_adders[0])
+            Vedic_Mult_comb #(
+                .BIT_WIDTH (HALF),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_hh (
+                .a   (a[BIT_WIDTH-1:HALF]),
+                .b   (b[BIT_WIDTH-1:HALF]),
+                .out (p_hh)
             );
 
-            CLA_grouped#(BIT_WIDTH-1) adder2 (
-                .a( adder1_sum),
-                .b( vedic_out[(2*(BIT_WIDTH-1))-1 : BIT_WIDTH-1]),
-                .cin (1'b0),
-                .sum( out[(2*(BIT_WIDTH-1))-1: BIT_WIDTH-1]),
-                .carry( carry_from_adders[1])
+            CLA #(
+                .BIT_WIDTH (BIT_WIDTH),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_cross_adder (
+                .a     (p_lh),
+                .b     (p_hl),
+                .cin   (1'b0),
+                .sum   (cross_sum),
+                .carry (cross_carry)
             );
 
-            
-
-            full_adder_hardcoded(
-                .a( (a[BIT_WIDTH]&b[BIT_WIDTH])),
-                .b( carry_from_adders[1]),
-                .c_in( carry_from_adders[0]),
-                .cum( out[2*(BIT_WIDTH-1)]),
-                c_out( out[2*(BIT_WIDTH) -1])
+            CLA #(
+                .BIT_WIDTH (BIT_WIDTH),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_middle_adder (
+                .a     (cross_sum),
+                .b     ({p_hh[HALF-1:0], p_ll[BIT_WIDTH-1:HALF]}),
+                .cin   (1'b0),
+                .sum   (middle_sum),
+                .carry (middle_carry)
             );
 
+            /* Both carries belong at bit 3*HALF and therefore must be added. */
+            assign upper_addend = cross_carry;
 
-        end else begin: two
-
-            vedic_mult_2bit(
-                .a( a),
-                .b( b),
-                .out( out)
+            CLA #(
+                .BIT_WIDTH (HALF),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_upper_adder (
+                .a     (p_hh[BIT_WIDTH-1:HALF]),
+                .b     (upper_addend),
+                .cin   (middle_carry),
+                .sum   (upper_sum),
+                .carry (upper_carry_unused)
             );
 
+            assign out = {upper_sum, middle_sum, p_ll[HALF-1:0]};
+
+        end else begin : gen_odd
+            localparam EVEN_WIDTH = BIT_WIDTH - 1;
+
+            wire [2*EVEN_WIDTH-1:0] lower_product;
+            wire [EVEN_WIDTH-1:0]   cross_a;
+            wire [EVEN_WIDTH-1:0]   cross_b;
+            wire [EVEN_WIDTH-1:0]   cross_sum;
+            wire                    cross_carry;
+            wire [EVEN_WIDTH-1:0]   middle_sum;
+            wire                    middle_carry;
+            wire                    top_partial;
+            wire                    top_sum;
+            wire                    top_carry;
+
+            Vedic_Mult_comb #(
+                .BIT_WIDTH (EVEN_WIDTH),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_even_child (
+                .a   (a[EVEN_WIDTH-1:0]),
+                .b   (b[EVEN_WIDTH-1:0]),
+                .out (lower_product)
+            );
+
+            assign cross_a = b[BIT_WIDTH-1] ?
+                             a[EVEN_WIDTH-1:0] : {EVEN_WIDTH{1'b0}};
+            assign cross_b = a[BIT_WIDTH-1] ?
+                             b[EVEN_WIDTH-1:0] : {EVEN_WIDTH{1'b0}};
+
+            CLA #(
+                .BIT_WIDTH (EVEN_WIDTH),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_cross_adder (
+                .a     (cross_a),
+                .b     (cross_b),
+                .cin   (1'b0),
+                .sum   (cross_sum),
+                .carry (cross_carry)
+            );
+
+            CLA #(
+                .BIT_WIDTH (EVEN_WIDTH),
+                .GROUP_SIZE(GROUP_SIZE)
+            ) u_middle_adder (
+                .a     (cross_sum),
+                .b     (lower_product[2*EVEN_WIDTH-1:EVEN_WIDTH]),
+                .cin   (1'b0),
+                .sum   (middle_sum),
+                .carry (middle_carry)
+            );
+
+            assign top_partial = a[BIT_WIDTH-1] & b[BIT_WIDTH-1];
+            assign top_sum = top_partial ^ cross_carry ^ middle_carry;
+            assign top_carry = (top_partial & cross_carry) |
+                               (top_partial & middle_carry) |
+                               (cross_carry & middle_carry);
+
+            assign out = {
+                top_carry,
+                top_sum,
+                middle_sum,
+                lower_product[EVEN_WIDTH-1:0]
+            };
         end
-
     endgenerate
-
 
 endmodule

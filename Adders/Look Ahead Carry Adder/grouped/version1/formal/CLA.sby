@@ -1,0 +1,16 @@
+[options]
+mode prove
+depth 2
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal calc_carries.v cla_tree.v CLA_grouped.v formal_CLA.v
+prep -top formal_CLA
+
+[files]
+calc_carries.v
+cla_tree.v
+CLA_grouped.v
+formal_CLA.v
